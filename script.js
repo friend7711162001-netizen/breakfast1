@@ -160,17 +160,59 @@ async function fetchUserInfo() {
 }
 
 function getToken(callback) {
-    state.tokenClient.callback = async (resp) => {
-        if (resp.error !== undefined) throw (resp);
-        localStorage.setItem('google_access_token', resp.access_token);
-        localStorage.setItem('google_token_expiry', Date.now() + (resp.expires_in * 1000));
-        fetchUserInfo();
-        if (callback) callback();
-    };
-    if (gapi.client.getToken() === null) {
-        state.tokenClient.requestAccessToken({ prompt: 'consent' });
-    } else {
-        state.tokenClient.requestAccessToken({ prompt: '' });
+    console.log('getToken called');
+    const loginBtn = document.getElementById('login-btn-lg');
+    const originalText = loginBtn ? loginBtn.innerHTML : '🔐 以 Google 帳號登入';
+    
+    if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = '⌛ 正在開啟驗證視窗...';
+    }
+
+    try {
+        if (!state.tokenClient) {
+            throw new Error('Google 登入元件尚未就緒，請稍後再試。');
+        }
+
+        state.tokenClient.callback = async (resp) => {
+            console.log('GIS callback received', resp);
+            if (resp.error !== undefined) {
+                if (loginBtn) {
+                    loginBtn.disabled = false;
+                    loginBtn.innerHTML = originalText;
+                }
+                alert(`登入發生錯誤: ${resp.error}\n${resp.error_description || ''}`);
+                throw (resp);
+            }
+            localStorage.setItem('google_access_token', resp.access_token);
+            localStorage.setItem('google_token_expiry', Date.now() + (resp.expires_in * 1000));
+            fetchUserInfo();
+            if (callback) callback();
+        };
+
+        console.log('Requesting access token...');
+        if (gapi.client.getToken() === null) {
+            state.tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            state.tokenClient.requestAccessToken({ prompt: '' });
+        }
+
+        // 超時恢復機制：如果 10 秒後沒反應，恢復按鈕（可能彈窗被攔截了）
+        setTimeout(() => {
+            if (loginBtn && loginBtn.disabled && loginBtn.innerHTML.includes('正在開啟')) {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = originalText;
+                console.warn('Login request timed out. Popup might be blocked.');
+            }
+        }, 10000);
+
+    } catch (err) {
+        console.error('getToken error:', err);
+        alert(`無法啟動 Google 登入: ${err.message}`);
+        if (loginBtn) {
+            loginBtn.disabled = false;
+            loginBtn.innerHTML = originalText;
+        }
     }
 }
 
