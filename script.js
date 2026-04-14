@@ -34,7 +34,9 @@ let state = {
     tokenClient: null,
     gapiInited: false,
     gisInited: false,
-    currentItemWithOptions: null // 暫存正在選擇選項的品項
+    currentItemWithOptions: null, // 暫存正在選擇選項的品項
+    sheetIds: {}, // 新增：分頁名稱與 ID 的對照表
+    currentUserRole: null // 新增：當前使用者的身份
 };
 
 // --- 初始化流程 ---
@@ -276,8 +278,29 @@ function updateAuthUI(isLoggedIn) {
 
 // --- 資料讀取邏輯 ---
 
+async function fetchSpreadsheetMetadata() {
+    try {
+        const response = await gapi.client.sheets.spreadsheets.get({
+            spreadsheetId: SPREADSHEET_ID
+        });
+        const sheets = response.result.sheets;
+        state.sheetIds = {};
+        sheets.forEach(s => {
+            state.sheetIds[s.properties.title] = s.properties.sheetId;
+        });
+        console.log('Sheet IDs loaded:', state.sheetIds);
+    } catch (err) {
+        console.error('Error fetching spreadsheet metadata:', err);
+    }
+}
+
 async function fetchData() {
     try {
+        // 先獲取 metadata (如果還沒有)
+        if (Object.keys(state.sheetIds).length === 0) {
+            await fetchSpreadsheetMetadata();
+        }
+
         const response = await gapi.client.sheets.spreadsheets.values.batchGet({
             spreadsheetId: SPREADSHEET_ID,
             ranges: ['早餐店!A1:A100', '價格!A2:E500', '紀錄!A:D', '管理員!A2:C50'],
@@ -298,12 +321,13 @@ async function fetchData() {
             return;
         }
 
+        state.currentUserRole = currentUser.role; // 儲存身份
         showLoginOverlay(false);
         updateRoleUI(currentUser.role);
 
         // 2. 處理其它資料
         state.shops = (valueRanges[0].values || []).flat().filter(s => s !== "");
-        state.menu = (valueRanges[1].values || []).map(row => {
+        state.menu = (valueRanges[1].values || []).map((row, index) => {
             const item = row[1] || "";
             // 嚴格限制：僅限「紅茶、豆漿、奶茶、咖啡、拿鐵」才開啟選項
             const isDrink = ["紅茶", "豆漿", "奶茶", "咖啡", "拿鐵"].some(key => item.includes(key));
@@ -312,7 +336,8 @@ async function fetchData() {
                 item: item,
                 price: parseInt(row[2]) || 0,
                 hasTemp: isDrink,
-                hasSugar: isDrink
+                hasSugar: isDrink,
+                rowIndex: index + 2 // 記錄在試算表中的行數 (A2 開始，所以 index 0 是第 2 行)
             };
         });
         const recordRows = valueRanges[2].values || [];
@@ -419,16 +444,69 @@ function renderMenu(shopName) {
     items.forEach(product => {
         const div = document.createElement('div');
         div.className = 'menu-item';
+        
+        const isAdmin = state.currentUserRole === '管理員';
+        const iconClass = isAdmin ? 'delete-icon' : 'add-icon';
+        const iconEmoji = isAdmin ? '❌' : '➕';
+
         div.innerHTML = `
             <div class="item-info">
                 <span class="item-name">${product.item}</span>
                 <span class="item-price">$${product.price}</span>
             </div>
-            <div class="add-icon">➕</div>
+            <div class="${iconClass}">${iconEmoji}</div>
         `;
+
+        // 點擊整個項目預設為加入點餐
         div.onclick = () => handleAddToOrder(product);
+
+        // 如果是管理員，為 ❌ 圖示綁定刪除事件
+        if (isAdmin) {
+            const deleteBtn = div.querySelector('.delete-icon');
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation(); // 防止觸發 handleAddToOrder
+                deleteMeal(product);
+            };
+        }
+
         menuList.appendChild(div);
     });
+}
+
+async function deleteMeal(product) {
+    if (!confirm(`確定要刪除「${product.item}」嗎？\n(此動作將直接從雲端試算表移除)`)) {
+        return;
+    }
+
+    const sheetId = state.sheetIds['價格'];
+    if (sheetId === undefined) {
+        showToast('❌ 找不到「價格」分頁 ID，請重新整理頁面');
+        return;
+    }
+
+    try {
+        showToast('⏳ 正在刪除...');
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+                requests: [{
+                    deleteDimension: {
+                        range: {
+                            sheetId: sheetId,
+                            dimension: 'ROWS',
+                            startIndex: product.rowIndex - 1, // 0-indexed
+                            endIndex: product.rowIndex
+                        }
+                    }
+                }]
+            }
+        });
+        showToast(`✅ 已刪除：${product.item}`);
+        fetchData(); // 重新整理資料
+    } catch (err) {
+        console.error('Delete error:', err);
+        showToast('❌ 刪除失敗，請確認權限或網路');
+    }
 }
 
 // 點擊加入點餐 (統一開彈窗)

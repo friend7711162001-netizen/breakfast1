@@ -262,6 +262,29 @@ header h1 {
     color: var(--accent-color);
 }
 
+.add-icon, .delete-icon {
+    font-size: 1.2rem;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+    user-select: none;
+    cursor: pointer;
+}
+
+.add-icon:hover {
+    background: var(--secondary-color);
+    transform: scale(1.1);
+}
+
+.delete-icon:hover {
+    background: #FFEBEE;
+    transform: scale(1.1);
+}
+
 /* Order List (Cart) */
 .pickup-info {
     display: flex;
