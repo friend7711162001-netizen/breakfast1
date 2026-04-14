@@ -44,23 +44,54 @@ function gapiLoaded() {
 }
 
 async function initializeGapiClient() {
-    await gapi.client.init({
-        apiKey: API_KEY,
-        discoveryDocs: [DISCOVERY_DOC],
-    });
-    state.gapiInited = true;
-    maybeStartApp();
+    try {
+        console.log('Initializing GAPI client...');
+        await gapi.client.init({
+            apiKey: API_KEY,
+            discoveryDocs: [DISCOVERY_DOC],
+        });
+        state.gapiInited = true;
+        console.log('GAPI client inited.');
+        maybeStartApp();
+    } catch (e) {
+        console.error('GAPI init error:', e);
+        const errorDetail = e.details || e.message || (e.result && e.result.error ? e.result.error.message : JSON.stringify(e));
+        showFatalError(`Google API (GAPI) 初始化失敗：${errorDetail}`);
+    }
 }
 
 function gisLoaded() {
-    state.tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: '',
-    });
-    state.gisInited = true;
-    maybeStartApp();
+    try {
+        console.log('Initializing GIS client...');
+        if (!google || !google.accounts || !google.accounts.oauth2) {
+            throw new Error('找不到 Google Identity Services 腳本，可能被廣告攔截器阻擋。');
+        }
+        state.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: '',
+        });
+        state.gisInited = true;
+        console.log('GIS client inited.');
+        maybeStartApp();
+    } catch (e) {
+        console.error('GIS init error:', e);
+        showFatalError(`Google 登入元件 (GIS) 載入失敗：${e.message}`);
+    }
 }
+
+// 初始化監聽狗：如果 10 秒後還沒完成初始化，給予提示
+setTimeout(() => {
+    if (!state.gapiInited || !state.gisInited) {
+        if (!window.configError) {
+            console.warn('Initialization timeout.');
+            const missing = [];
+            if (!state.gapiInited) missing.push('基礎 API (GAPI)');
+            if (!state.gisInited) missing.push('登入元件 (GIS)');
+            showFatalError(`系統初始化超時，尚未載入：${missing.join('、')}。請檢查網路連接或關閉廣告攔截器 (AdBlock)。`);
+        }
+    }
+}, 10000);
 
 function maybeStartApp() {
     if (state.gapiInited && state.gisInited) {
