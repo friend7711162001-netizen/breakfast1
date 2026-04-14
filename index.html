@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>早安！早餐計算器</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <!-- 行動裝置圖示設定 -->
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#8DA399">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+
+<body>
+    <!-- 全螢幕登入遮罩 -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-card card">
+            <h1>🍳 早安！點餐囉</h1>
+            <p class="login-subtitle">請登入您的 Google 帳號以開始</p>
+            <button id="login-btn-lg" class="btn-primary btn-lg">🔐 以 Google 帳號登入</button>
+            <p id="auth-error-msg" class="error-msg hidden">⚠️ 您不在授權名單中，請聯繫管理員。</p>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <header>
+            <div class="top-checkout">
+                <!-- 新增：登入狀態 -->
+                <div id="auth-status" class="auth-status">
+                    <span id="user-role" class="badge"></span>
+                    <span id="user-name"></span>
+                    <button id="auth-btn" class="btn-secondary">🔓 登出</button>
+                </div>
+                <div class="checkout-main">
+                    <div class="total-info">
+                        <span class="total-label">總共：</span>
+                        <span id="total-amount">$0</span>
+                    </div>
+                    <button id="submit-order" class="btn-primary" disabled>確認送出</button>
+                </div>
+            </div>
+            <h1>🍳 早安！點餐囉</h1>
+            <p class="subtitle">明天想吃哪一家呢？</p>
+        </header>
+
+        <div class="main-layout">
+            <!-- 左側：挑選店家與菜單 -->
+            <div class="left-column">
+                <section id="shop-selection" class="card">
+                    <div class="card-header">
+                        <h2>🏪 選擇早餐店</h2>
+                        <button id="admin-add-shop" class="btn-admin hidden">➕ 新增店家</button>
+                    </div>
+                    <div id="shop-list" class="shop-grid">
+                        <div class="loading">載入中...</div>
+                    </div>
+                </section>
+
+                <section id="menu-section" class="card">
+                    <div class="card-header">
+                        <h2 id="current-shop-name">請選擇店家</h2>
+                        <button id="admin-add-meal" class="btn-admin hidden">🍔 新增餐點</button>
+                    </div>
+                    <div id="menu-list" class="menu-grid">
+                        <p class="empty-msg">點擊上方店家顯示菜單</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 右側：點餐清單與歷史紀錄 -->
+            <div class="right-column">
+                <section id="order-section" class="card">
+                    <div class="card-header">
+                        <h2>📝 我的點餐清單</h2>
+                        <button id="clear-order" class="btn-text">🗑️ 清空</button>
+                    </div>
+
+                    <!-- 新增：取餐資訊輸入 -->
+                    <div class="pickup-info">
+                        <div class="input-group">
+                            <label>🗓️ 取餐日期</label>
+                            <input type="date" id="pickup-date">
+                        </div>
+                        <div class="input-group">
+                            <label>⏰ 取餐時間</label>
+                            <select id="pickup-time">
+                                <!-- 由 JavaScript 動態生成選項 -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="order-list">
+                        <p class="empty-msg">目前還沒有點餐喔～快去選購吧！</p>
+                    </div>
+                </section>
+
+                <section id="records-section" class="card">
+                    <h2>📜 最近點餐紀錄</h2>
+                    <div id="records-list" class="records-grid">
+                        <div class="loading">載入中...</div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示彈窗 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- 新增店家彈窗 -->
+    <div id="add-shop-modal" class="modal hidden">
+        <div class="modal-content card">
+            <h3>🏪 新增早餐店</h3>
+            <div class="input-group">
+                <label>店家名稱</label>
+                <input type="text" id="new-shop-name" placeholder="請輸入店名...">
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-add-shop" class="btn-secondary">取消</button>
+                <button id="confirm-add-shop" class="btn-primary">確認新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增餐點彈窗 -->
+    <div id="add-meal-modal" class="modal hidden">
+        <div class="modal-content card">
+            <h3>🍔 新增餐點</h3>
+            <p id="meal-modal-shop-name" class="subtitle"></p>
+            <div class="input-group">
+                <label>品項名稱</label>
+                <input type="text" id="new-meal-name" placeholder="例如：紅茶、黑胡椒麵...">
+            </div>
+            <div class="input-group">
+                <label>價格</label>
+                <input type="number" id="new-meal-price" placeholder="例如：25">
+            </div>
+            <div class="info-box">
+                💡 名稱包含「紅茶、豆漿、奶茶」將自動開啟溫度與甜度選項。
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-add-meal" class="btn-secondary">取消</button>
+                <button id="confirm-add-meal" class="btn-primary">確認新增</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="options-modal" class="modal hidden">
+        <div class="modal-content card">
+            <h3 id="modal-item-name">餐點名稱</h3>
+
+            <div id="qty-options-group" class="option-group">
+                <label>🔢 數量</label>
+                <div class="qty-selector">
+                    <button id="modal-qty-minus" class="qty-btn minus">-</button>
+                    <input type="number" id="modal-qty-input" value="1" min="1">
+                    <button id="modal-qty-plus" class="qty-btn">+</button>
+                </div>
+                <div class="option-chips qty-quick-chips" id="qty-chips">
+                    <button class="chip-qty" data-val="5">5</button>
+                    <button class="chip-qty" data-val="10">10</button>
+                    <button class="chip-qty" data-val="15">15</button>
+                </div>
+            </div>
+
+            <div id="temp-options-group" class="option-group">
+                <label>🌡️ 溫度</label>
+                <div class="option-chips" id="temp-chips">
+                    <button class="chip" data-val="冰">冰</button>
+                    <button class="chip" data-val="溫">溫</button>
+                    <button class="chip" data-val="熱">熱</button>
+                </div>
+            </div>
+
+            <div id="sugar-options-group" class="option-group">
+                <label>🍬 甜度</label>
+                <div class="option-chips" id="sugar-chips">
+                    <button class="chip" data-val="正常糖">正常糖</button>
+                    <button class="chip" data-val="半糖">半糖</button>
+                    <button class="chip" data-val="微糖">微糖</button>
+                    <button class="chip" data-val="無糖">無糖</button>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="cancel-options" class="btn-secondary">取消</button>
+                <button id="confirm-options" class="btn-primary">確認加入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定檔 -->
+    <script src="config.js"></script>
+    <!-- 主程式 -->
+    <script src="script.js"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+
+</html>
