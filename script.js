@@ -590,7 +590,7 @@ function copyOrderText(shopName) {
         return index === 0 ? itemLine : `          ${itemLine}`;
     }).join('\n');
     const shopTotal = shopItems.reduce((acc, o) => acc + (o.price * o.qty), 0);
-    const text = `【訂餐資訊】\n日期：${date}\n時間：${time}\n內容：${itemsText}\n總額：$${shopTotal}\n\n再麻煩您了，謝謝`;
+    const text = `【訂餐資訊】毓琇\n日期：${date}\n時間：${time}\n內容：${itemsText}\n總額：$${shopTotal}\n\n再麻煩您了，謝謝`;
     navigator.clipboard.writeText(text).then(() => showToast(`✅ 已複製 ${shopName} 的內容`));
 }
 
