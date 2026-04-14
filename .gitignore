@@ -1,2 +1,2 @@
-# Google API Configuration (DO NOT COMMIT)
-config.js
+# Google API Configuration
+# .gitignore updated to allow config.js for GitHub Pages deployment

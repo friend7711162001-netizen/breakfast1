@@ -4,9 +4,21 @@
  */
 
 // --- 憑證設定 (由 config.js 提供) ---
-const API_KEY = CONFIG.API_KEY;
-const CLIENT_ID = CONFIG.CLIENT_ID;
-const SPREADSHEET_ID = CONFIG.SPREADSHEET_ID;
+let API_KEY, CLIENT_ID, SPREADSHEET_ID;
+
+try {
+    if (typeof CONFIG === 'undefined') {
+        throw new Error('找不到 CONFIG 設定。請確認 config.js 是否正確載入並上傳至伺服器。');
+    }
+    API_KEY = CONFIG.API_KEY;
+    CLIENT_ID = CONFIG.CLIENT_ID;
+    SPREADSHEET_ID = CONFIG.SPREADSHEET_ID;
+} catch (e) {
+    console.error('Initialization error:', e);
+    // 注意：此時 DOM 可能還沒載入完畢，預留一個標記
+    window.configError = e.message;
+}
+
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
 const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
 
@@ -60,6 +72,19 @@ function initApp() {
     initDateTime();
     initEventListeners();
 
+    // 檢查是否有設定檔錯誤
+    if (window.configError) {
+        showFatalError(window.configError);
+        return;
+    }
+
+    // 更新登入按鈕狀態為可用
+    const loginBtn = document.getElementById('login-btn-lg');
+    if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = '🔐 以 Google 帳號登入';
+    }
+
     // 如果已經有 token，嘗試獲取使用者資訊並進入
     const savedToken = localStorage.getItem('google_access_token');
     if (savedToken) {
@@ -77,9 +102,30 @@ function showLoginOverlay(show) {
     if (show) {
         overlay.style.display = 'flex';
         overlay.style.opacity = '1';
+        
+        // 如果 API 還沒準備好，禁用按鈕並提示
+        const loginBtn = document.getElementById('login-btn-lg');
+        if (loginBtn && (!state.gapiInited || !state.gisInited) && !window.configError) {
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '⌛ 正在初始化系統...';
+        }
     } else {
         overlay.style.opacity = '0';
         setTimeout(() => overlay.style.display = 'none', 500);
+    }
+}
+
+function showFatalError(msg) {
+    const errorMsgEl = document.getElementById('auth-error-msg');
+    const loginBtn = document.getElementById('login-btn-lg');
+    
+    if (errorMsgEl) {
+        errorMsgEl.textContent = `⚠️ 系統錯誤：${msg}`;
+        errorMsgEl.classList.remove('hidden');
+    }
+    if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = '❌ 系統無法啟動';
     }
 }
 
